@@ -1,0 +1,8 @@
+{
+    "name": "Streaming",
+    "main": "src/main.js",
+    "dependencies": {
+        "ws": "*",
+        "heapdump": "*"
+    }
+}

@@ -1,0 +1,63 @@
+<html>
+
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+</head>
+
+<body>
+    <canvas id="stream" style="resize:both;"></canvas>
+    <button onclick="closeCamera();">Close</button>
+</body>
+
+<script type="text/javascript">
+    var ws = null;
+    var stream = document.getElementById("stream");
+    var context = stream.getContext("2d");
+
+    $(document).ready(function () {
+        ws = new WebSocket("ws://192.168.1.73:9090");
+        var sizeReceived = false;
+        ws.onopen = function () {
+
+        };
+
+        ws.onerror = function (e) {
+            console.log(e);
+        };
+
+        ws.onmessage = function (message) {
+            var data = JSON.parse(message.data);
+            switch (data.type) {
+            case "size":
+                stream.width = data.width;
+                stream.height = data.height;
+                stream.style.width = data.width + "px";
+                stream.style.height = data.height + "px";
+                break;
+            case "frame":
+                if (!sizeReceived) {
+                    sizeReceived = true;
+                    ws.send("size");
+                }
+                var image = "data:image/jpg;base64," + data.frame;
+                drawFrame(image);
+                break;
+
+            }
+        };
+    });
+
+    function drawFrame(image) {
+        var img = new Image();
+        img.onload = function () {
+            context.drawImage(img, 0, 0);
+        };
+        img.src = image;
+    };
+
+    function closeCamera() {
+        ws.send("close");
+    };
+</script>
+
+</html>
