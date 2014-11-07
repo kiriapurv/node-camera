@@ -35,7 +35,8 @@ var connectClient = function (ws) {
         cam.Open(frameCallback, {
             width: 640,
             height: 360,
-            window: true
+            window: true,
+            codec: ".jpg"
         });
     }
     clients[index] = ws;

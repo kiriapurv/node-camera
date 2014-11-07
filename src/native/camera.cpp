@@ -21,6 +21,7 @@ struct TMessage {
     bool resize;
     int32_t width, height;
     bool window;
+    std::string codec;
     ~TMessage() {
         callBack.Clear();
         callBack.Dispose();
@@ -98,9 +99,9 @@ void CameraOpen(uv_work_t* req) {
 
         //Encode to jpg
         if(message->resize) {
-            cv::imencode(".jpg",*rsz,*msg->image);   
+            cv::imencode(message->codec,*rsz,*msg->image);   
         } else {
-            cv::imencode(".jpg",*tmp,*msg->image);
+            cv::imencode(message->codec,*tmp,*msg->image);
         }
         
         msg->callBack = callBack;
@@ -146,6 +147,9 @@ Handle<Value> Open(const Arguments& args) {
         return ThrowException(Exception::TypeError(String::New("First argument must be frame callback function")));
     }
     
+    //Default Arguments
+    message->codec = std::string(".jpg");
+    
     //Check if size is passed
     if(args.Length() == 2) {
         //Second parameter is parameters, which contains on Json object having width and height
@@ -159,6 +163,13 @@ Handle<Value> Open(const Arguments& args) {
         }
         if(params->Has(String::NewSymbol("window"))) {
             message->window = params->Get(String::NewSymbol("window"))->BooleanValue();
+        }
+        if(params->Has(String::NewSymbol("codec"))) {
+            Local<String> val = params->Get(String::NewSymbol("codec"))->ToString();
+            char *buffer = (char*) malloc(sizeof(char) * val->Length());
+            val->WriteAscii(buffer,0,val->Length());
+            message->codec = std::string(buffer);
+            std::free(&buffer);
         }
     }
     if(message->window) {
@@ -204,4 +215,3 @@ void init(Handle<Object> exports) {
 }
 
 NODE_MODULE(camera, init);
-
