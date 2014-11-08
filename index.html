@@ -2,49 +2,119 @@
 
 <head>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <style>
+        div#container {
+            width: 640px;
+            height: 360px;
+            box-shadow: 1px 1px 100px #777;
+        }
+        div#heading {
+            padding: 10px 20px 10px 20px;
+            background-color: #111;
+            text-align: right;
+        }
+        button {
+            background: rgba(0, 0, 0, 0);
+            color: #FFF;
+            border-style: none;
+        }
+        div#captures {
+            height: 100%;
+            right: 0px;
+            top: 0px;
+            background-color: #CCC;
+            width: 300px;
+            position: absolute;
+            overflow-y: scroll;
+        }
+        div.captured-frame {
+            width: 250px;
+            height: 140px;
+            margin: 10px 25px 10px 25px;
+            box-shadow: 0px 0px 50px #111;
+        }
+        div.captured-frame img {
+            width: 250px;
+            height: 140px;
+            background-color: #444;
+            border-style: none;
+        }
+        div.captured-frame .frame-title {
+            width: 210px;
+            height: 20px;
+            padding: 10px 20px 10px 20px;
+            background: #111;
+            position: relative;
+            bottom: 40px;
+            color: rgba(0, 0, 0, 0.5);
+        }
+        a {
+            text-decoration: none;
+            color: #FFF;
+            font-size: 12px;
+        }
+    </style>
 </head>
 
 <body>
-    <canvas id="stream" style="resize:both;"></canvas>
-    <button onclick="closeCamera();">Close</button>
+    <div id="container">
+        <div id="heading">
+            <button id="capture" onclick="capture();">
+                &#x2727;
+            </button>
+            <button id="play" onclick="openCamera();">
+                &#9658;
+            </button>
+            <button id="pause" onclick="closeCamera();">
+                &#10074;&#10074;
+            </button>
+        </div>
+        <canvas id="stream" style="resize:both;"></canvas>
+    </div>
+    <div id="captures">
+
+    </div>
+    <a id="acapture" href="" download="" style="display : none"></a>
 </body>
 
 <script type="text/javascript">
     var ws = null;
     var stream = document.getElementById("stream");
+    var container = document.getElementById("container");
     var context = stream.getContext("2d");
+    var image = null;
+    var imageEle = "<div id=\"##id\" class=\"captured-frame\"><img class=\"frame-image\" src=\"##src\" /><div class=\"frame-title\"><a href=\"##href\" download=\"##title\">##title</a></div></div>";
+
+    function adjustSize(width, height) {
+        stream.width = width;
+        stream.height = height;
+        stream.style.width = width + "px";
+        stream.style.height = height + "px";
+        container.style.width = width + "px";
+        container.style.height = height + "px";
+        adjustPos();
+    };
+
+    function adjustPos() {
+        //Adjust player
+        $("#container").css("margin-top", function (index) {
+            return ($("window").height() / 2) + ($("#container").height() / 2);
+        });
+        //        $("#container").css("margin-right", function (index) {
+        //            return ($("document").width() - $("#captures").width()) / 2 + ($("#container").width() / 2);
+        //        });
+        $("#container").css("margin-left", function (index) {
+            return ((window.innerWidth) - $("#captures").width() - ($("#container").width())) / 2;
+        });
+    };
 
     $(document).ready(function () {
-        ws = new WebSocket("ws://192.168.1.73:9090");
-        var sizeReceived = false;
-        ws.onopen = function () {
 
-        };
+        adjustPos();
 
-        ws.onerror = function (e) {
-            console.log(e);
-        };
 
-        ws.onmessage = function (message) {
-            var data = JSON.parse(message.data);
-            switch (data.type) {
-            case "size":
-                stream.width = data.width;
-                stream.height = data.height;
-                stream.style.width = data.width + "px";
-                stream.style.height = data.height + "px";
-                break;
-            case "frame":
-                if (!sizeReceived) {
-                    sizeReceived = true;
-                    ws.send("size");
-                }
-                var image = "data:image/jpg;base64," + data.frame;
-                drawFrame(image);
-                break;
+        $("#pause").hide();
 
-            }
-        };
     });
 
     function drawFrame(image) {
@@ -56,7 +126,51 @@
     };
 
     function closeCamera() {
+        $("#play").show();
+        $("#pause").hide();
         ws.send("close");
+    };
+
+    function openCamera() {
+        ws = new WebSocket("ws://localhost:9090");
+        var sizeReceived = false;
+        ws.onopen = function () {
+            ws.send("open");
+        };
+
+        ws.onerror = function (e) {
+            console.log(e);
+        };
+
+        ws.onmessage = function (message) {
+            var data = JSON.parse(message.data);
+            switch (data.type) {
+            case "size":
+                adjustSize(data.width, data.height);
+                break;
+            case "frame":
+                if (!sizeReceived) {
+                    sizeReceived = true;
+                    ws.send("size");
+                }
+                image = "data:image/png;base64," + data.frame;
+                drawFrame(image);
+                break;
+
+            }
+        };
+        $("#play").hide();
+        $("#pause").show();
+    };
+
+    function capture() {
+        var cap = document.getElementById("acapture");
+        cap.href = image;
+        cap.download = "" + new Date().getTime() + ".jpg";
+        $("#acapture").click();
+        var id = "" + new Date().getTime();
+        var capImage = imageEle.replace("##id", id).replace("##src", image).replace("##href", image).replace(/##title/g, "" + id + ".jpg");
+        $("#captures").prepend(capImage);
     };
 </script>
 

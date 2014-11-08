@@ -204,6 +204,7 @@ Handle<Value> Close(const Arguments& args) {
     uv_close((uv_handle_t *) async, NULL);
     delete async;
     delete loop;
+    cv::destroyWindow("Preview");
     return scope.Close(String::New("ok"));
 }
 
