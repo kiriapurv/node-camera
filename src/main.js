@@ -86,7 +86,7 @@ http.createServer(function (req, resp) {
     resp.writeHead(200, {
         "Content-Type": "text/html"
     });
-    resp.end(fs.readFileSync("../index.html"));
+    resp.end(fs.readFileSync(__dirname + "/../index.html"));
 }).listen(9999);
 
 console.log("Http Server Started");

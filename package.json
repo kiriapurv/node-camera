@@ -4,5 +4,8 @@
     "dependencies": {
         "ws": "*",
         "heapdump": "*"
+    },
+    "scripts": {
+        "start": "node src/main.js"
     }
 }
