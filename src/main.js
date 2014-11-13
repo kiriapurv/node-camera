@@ -3,7 +3,8 @@ var cam = require("../build/Release/camera.node");
 var fs = require("fs");
 var websocketPort = 9090,
     webPort = 9999,
-    openBrowser = false;
+    openBrowser = false,
+    ip = "localhost";
 
 //Gathering Arguments
 process.argv.forEach(function (val, index, array) {
@@ -17,6 +18,10 @@ process.argv.forEach(function (val, index, array) {
     case "-webport":
         webPort = parseInt(array[index + 1]);
         break;
+    case "-ip":
+        ip = array[index + 1];
+        break;
+
     }
 });
 
@@ -99,7 +104,7 @@ wss.on('connection', function (ws) {
 
 //Create Http Server
 var http = require("http");
-var index = fs.readFileSync(__dirname + "/../index.html", 'utf8').replace("##wsport", websocketPort);
+var index = fs.readFileSync(__dirname + "/../index.html", 'utf8').replace("##webSocketAddress", ip + ":" + websocketPort);
 http.createServer(function (req, resp) {
     resp.writeHead(200, {
         "Content-Type": "text/html"

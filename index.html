@@ -132,7 +132,7 @@
     };
 
     function openCamera() {
-        ws = new WebSocket("ws://localhost:##wsport");
+        ws = new WebSocket("ws://##webSocketAddress");
         var sizeReceived = false;
         ws.onopen = function () {
             ws.send("open");
