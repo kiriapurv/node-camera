@@ -1,9 +1,27 @@
 var WebSocketServer = require("ws").Server;
 var cam = require("../build/Release/camera.node");
 var fs = require("fs");
+var websocketPort = 9090,
+    webPort = 9999,
+    openBrowser = false;
+
+//Gathering Arguments
+process.argv.forEach(function (val, index, array) {
+    switch (val) {
+    case "-open":
+        openBrowser = true;
+        break;
+    case "-wsport":
+        websocketPort = parseInt(array[index + 1]);
+        break;
+    case "-webport":
+        webPort = parseInt(array[index + 1]);
+        break;
+    }
+});
 
 var wss = new WebSocketServer({
-    port: 9090
+    port: websocketPort
 });
 
 var clients = {};
@@ -81,12 +99,17 @@ wss.on('connection', function (ws) {
 
 //Create Http Server
 var http = require("http");
-
+var index = fs.readFileSync(__dirname + "/../index.html", 'utf8').replace("##wsport", websocketPort);
 http.createServer(function (req, resp) {
     resp.writeHead(200, {
         "Content-Type": "text/html"
     });
-    resp.end(fs.readFileSync(__dirname + "/../index.html"));
-}).listen(9999);
+    resp.end(index);
+}).listen(webPort);
 
 console.log("Http Server Started");
+
+if (openBrowser) {
+    var spawn = require('child_process').spawn
+    spawn('open', ['http://localhost:' + webPort]);
+}
