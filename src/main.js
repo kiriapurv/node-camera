@@ -4,7 +4,9 @@ var fs = require("fs");
 var websocketPort = 9090,
     webPort = 9999,
     openBrowser = false,
-    ip = "localhost";
+    ip = "localhost",
+    width = 640,
+    height = 480;
 
 //Gathering Arguments
 process.argv.forEach(function (val, index, array) {
@@ -21,7 +23,11 @@ process.argv.forEach(function (val, index, array) {
     case "-ip":
         ip = array[index + 1];
         break;
-
+    case "-res":
+        var res = array[index + 1].split("x");
+        width = parseInt(res[0]);
+        height = parseInt(res[1]);
+        break;
     }
 });
 
@@ -56,8 +62,8 @@ var connectClient = function (ws) {
     if (!cam.IsOpen()) {
         console.log("New Clients, Opening Camera");
         cam.Open(frameCallback, {
-            width: 640,
-            height: 360,
+            width: width,
+            height: height,
             window: false,
             codec: ".jpg"
         });
