@@ -6,7 +6,7 @@ var websocketPort = 9090,
     openBrowser = false,
     ip = "localhost",
     width = 640,
-    height = 480;
+    height = 360;
 
 //Gathering Arguments
 process.argv.forEach(function (val, index, array) {
