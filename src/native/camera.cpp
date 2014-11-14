@@ -8,7 +8,17 @@
 #include <fstream>
 #include <vector>
 
+#ifndef FALSE
+#define FALSE (0)
+#endif
+#ifndef TRUE
+#define TRUE (!FALSE)
+#endif
+
 using namespace v8;
+
+//Define functions in scope
+std::string* stringValue(Local<Value> value);
 
 int m_brk;
 int32_t preview_width, preview_height;
@@ -149,6 +159,8 @@ Handle<Value> Open(const Arguments& args) {
     
     //Default Arguments
     message->codec = std::string(".jpg");
+    Local<Value> input = Number::New(0);
+    std::string* inputString;
     
     //Check if size is passed
     if(args.Length() == 2) {
@@ -166,11 +178,15 @@ Handle<Value> Open(const Arguments& args) {
         }
         if(params->Has(String::NewSymbol("codec"))) {
             Local<String> val = params->Get(String::NewSymbol("codec"))->ToString();
-            char *buffer = (char*) malloc(sizeof(char) * val->Length());
-            val->WriteAscii(buffer,0,val->Length());
-            message->codec = std::string(buffer);
-            std::free(&buffer);
+            message->codec = *stringValue(val);
         }
+        if(params->Has(String::NewSymbol("input"))) {
+            input = params->Get(String::NewSymbol("input"));
+            if(!input->IsNumber()) {
+                inputString = stringValue(input);
+            }
+        }
+        
     }
     if(message->window) {
         cv::namedWindow("Preview",1);   
@@ -181,7 +197,11 @@ Handle<Value> Open(const Arguments& args) {
     message->callBack = Persistent<Function>::New(localFunc);
     //Initiate OpenCV WebCam
     message->capture = new cv::VideoCapture();
-    message->capture->open(0);
+    if(input->IsNumber()) {
+        message->capture->open((int)input->Int32Value());
+    } else {
+        message->capture->open(*inputString);
+    }
     cv::waitKey(10);
     
     uv_work_t* req = new uv_work_t();
@@ -191,6 +211,12 @@ Handle<Value> Open(const Arguments& args) {
     
     uv_async_init(loop,async,updateAsync);
     uv_queue_work(loop, req, CameraOpen,(uv_after_work_cb) CameraClose);
+    
+    //Free resources
+    //free #1
+    if(!input->IsNumber()) {
+        delete inputString;
+    }
     
     return scope.Close(String::New("ok"));
 }
@@ -213,6 +239,19 @@ void init(Handle<Object> exports) {
     exports->Set(String::NewSymbol("Close"), FunctionTemplate::New(Close)->GetFunction());
     exports->Set(String::NewSymbol("IsOpen"), FunctionTemplate::New(IsOpen)->GetFunction());
     exports->Set(String::NewSymbol("GetPreviewSize"), FunctionTemplate::New(GetPreviewSize)->GetFunction());
+}
+
+std::string* stringValue(Local<Value> value) {
+    if(value->IsString()){
+        //Alloc #1
+        char * buffer = (char*) malloc(sizeof(char) * value->ToString()->Length());
+        value->ToString()->WriteAscii(buffer,0,value->ToString()->Length());
+        std::string *ret = new std::string(buffer);
+        free(buffer);
+        return ret;
+    } else {
+        return new std::string("");
+    }
 }
 
 NODE_MODULE(camera, init);
