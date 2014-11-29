@@ -4,7 +4,6 @@ var fs = require("fs");
 var websocketPort = 9090,
     webPort = 9999,
     openBrowser = false,
-    ip = "localhost",
     width = 640,
     height = 360;
 
@@ -19,9 +18,6 @@ process.argv.forEach(function (val, index, array) {
         break;
     case "-webport":
         webPort = parseInt(array[index + 1]);
-        break;
-    case "-ip":
-        ip = array[index + 1];
         break;
     case "-res":
         var res = array[index + 1].split("x");
@@ -110,7 +106,7 @@ wss.on('connection', function (ws) {
 
 //Create Http Server
 var http = require("http");
-var index = fs.readFileSync(__dirname + "/../index.html", 'utf8').replace("##webSocketAddress", ip + ":" + websocketPort);
+var index = fs.readFileSync(__dirname + "/../index.html", 'utf8').replace("##webSocketPort", websocketPort);
 http.createServer(function (req, resp) {
     resp.writeHead(200, {
         "Content-Type": "text/html"

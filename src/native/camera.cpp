@@ -107,12 +107,18 @@ void CameraOpen(uv_work_t* req) {
 
         //TODO : Add image parameters here
 
+        std::vector<int> compression_parameters;
+        compression_parameters.push_back( CV_IMWRITE_JPEG_QUALITY);
+        compression_parameters.push_back(50);
+        
         //Encode to jpg
         if(message->resize) {
-            cv::imencode(message->codec,*rsz,*msg->image);   
+            cv::imencode(message->codec,*rsz,*msg->image,compression_parameters);   
         } else {
-            cv::imencode(message->codec,*tmp,*msg->image);
+            cv::imencode(message->codec,*tmp,*msg->image,compression_parameters);
         }
+        
+        compression_parameters.clear();
         
         msg->callBack = callBack;
         async->data  = msg;

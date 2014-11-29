@@ -117,6 +117,10 @@
 
     });
 
+    //FPS Calculation
+    var currentFps = 0,
+        fps = 0;
+
     function drawFrame(image) {
         var img = new Image();
         img.onload = function () {
@@ -132,7 +136,7 @@
     };
 
     function openCamera() {
-        ws = new WebSocket("ws://##webSocketAddress");
+        ws = new WebSocket("ws://" + window.location.host.split(":")[0] + ":##webSocketPort");
         var sizeReceived = false;
         ws.onopen = function () {
             ws.send("open");
