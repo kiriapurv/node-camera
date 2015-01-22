@@ -6,6 +6,7 @@
 #include <opencv2/video/video.hpp>
 #include <iostream>
 #include <fstream>
+#include <uv.h>
 #include <vector>
 
 #ifndef FALSE
@@ -22,7 +23,7 @@ std::string* stringValue(Local<Value> value);
 
 int m_brk;
 int32_t preview_width, preview_height;
-uv_async_t *async;
+uv_async_t async;
 uv_loop_t *loop;
 
 struct TMessage {
@@ -33,76 +34,73 @@ struct TMessage {
     bool window;
     std::string codec;
     ~TMessage() {
-        callBack.Clear();
-        callBack.Dispose();
+        callBack.Reset();
         delete capture;
     }
 };
 
 struct AsyncMessage {
-    std::vector<unsigned char> *image;
-    cv::Mat *frame;
+    std::vector<unsigned char> image;
+    cv::Mat frame;
     bool window;
-    Persistent<Function> callBack;
 };
+
+TMessage *message;
 
 void updateAsync(uv_async_t* req, int status) {
     
-    HandleScope scope;
+    Isolate* isolate = Isolate::GetCurrent();
+    HandleScope scope(isolate);
     
-    AsyncMessage* message = (AsyncMessage*) req->data;
+    AsyncMessage* asyncMessage = (AsyncMessage*) req->data;
     
-    //Update Size
-    preview_width = message->frame->size().width;
-    preview_height = message->frame->size().height;
+    Local<Function> callBack = Local<Function>::New(isolate,message->callBack);
     
-    Persistent<Function> callBack = message->callBack;
-    
-    if(message->window) {
-        cv::imshow("Preview", *message->frame);
+    if(asyncMessage->window) {
+        cv::imshow("Preview", asyncMessage->frame);
         cv::waitKey(20);
     }
     
-    Local<Array> arr = Array::New(message->image->size());
+    Local<Array> arr = Array::New(isolate,asyncMessage->image.size());
     int pos = 0;
-    for(unsigned char c : *message->image) {
-        arr->Set(pos++,Integer::New(c));
+    for(unsigned char c : asyncMessage->image) {
+        arr->Set(pos++,Integer::New(isolate,c));
     }
     
     Local<Value> argv[] = {
             arr
     };
     
-    callBack->Call(Context::GetCurrent()->Global(), 1, argv);
-    
-    delete message->frame;
-    delete message->image;
+    callBack->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+    asyncMessage->image.clear();
+    asyncMessage->frame.release();
 }
 
 void CameraOpen(uv_work_t* req) {
-    //HandleScope scope;
     TMessage* message = (TMessage*) req->data;
-    Persistent<Function> callBack = message->callBack;
     
     while(m_brk > 0 && message->capture->isOpened()) {  
-        cv::Mat *tmp = new cv::Mat;
-        cv::Mat *rsz;
+        cv::Mat tmp, rsz;
         
-        AsyncMessage* msg = new AsyncMessage;
-        msg->image = new std::vector<uchar>();
-        msg->window = message->window;
+        AsyncMessage msg;
+        msg.image = std::vector<uchar>();
+        msg.window = message->window;
         
         //Capture Frame From WebCam
-        message->capture->read(*tmp);
+        message->capture->read(tmp);
         
         if(message->resize) {
-            rsz = new cv::Mat;
-            cv::Size *size = new cv::Size(message->width,message->height);
-            cv::resize(*tmp,*rsz,*size);
-            msg->frame = rsz;
-            delete size;
+            cv::Size size = cv::Size(message->width,message->height);
+            cv::resize(tmp,rsz,size);
+            msg.frame = rsz;
+            //Update Size
+            preview_width = message->width;
+            preview_height = message->height;
         } else {
-            msg->frame = tmp;
+            msg.frame = tmp;
+            //Update Size
+            preview_width = tmp.size().width;
+            preview_height = tmp.size().height;
         }
 
         //TODO : Add image parameters here
@@ -113,81 +111,85 @@ void CameraOpen(uv_work_t* req) {
         
         //Encode to jpg
         if(message->resize) {
-            cv::imencode(message->codec,*rsz,*msg->image,compression_parameters);   
+            cv::imencode(message->codec,rsz,msg.image,compression_parameters);   
         } else {
-            cv::imencode(message->codec,*tmp,*msg->image,compression_parameters);
+            cv::imencode(message->codec,tmp,msg.image,compression_parameters);
         }
         
         compression_parameters.clear();
         
-        msg->callBack = callBack;
-        async->data  = msg;
-        uv_async_send(async);
+        async.data  = &msg;
+        uv_async_send(&async);
         
-        if(!message->resize) {
-            delete tmp;
-        }
+        rsz.release();
+        tmp.release();
     }
     
 }
 
 void CameraClose(uv_work_t* req, int status) {
-    HandleScope scope;
+    Isolate* isolate = Isolate::GetCurrent();
+    HandleScope scope(isolate);
     TMessage* message = (TMessage*) req->data;
     message->capture->release();
     delete message->capture;
     delete req;
 }
 
-Handle<Value> IsOpen(const Arguments& args) {
-    HandleScope scope;
-    return scope.Close(Boolean::New((m_brk == 1) ? TRUE : FALSE));
+void IsOpen(const FunctionCallbackInfo<Value>& args) {
+    Isolate* isolate = Isolate::GetCurrent();
+    HandleScope scope(isolate);
+    args.GetReturnValue().Set(Boolean::New(isolate,(m_brk == 1) ? TRUE : FALSE));
 }
 
-Handle<Value> GetPreviewSize(const Arguments& args) {
-    HandleScope scope;
-    Local<Object> obj = Object::New();
-    obj->Set(String::NewSymbol("width"), Integer::New(preview_width));
-    obj->Set(String::NewSymbol("height"), Integer::New(preview_height));
-    return scope.Close(obj);
+void GetPreviewSize(const FunctionCallbackInfo<Value>& args) {
+    Isolate* isolate = Isolate::GetCurrent();
+    HandleScope scope(isolate);
+    Local<Object> obj = Object::New(isolate);
+    obj->Set(String::NewFromUtf8(isolate,"width"), Integer::New(isolate,preview_width));
+    obj->Set(String::NewFromUtf8(isolate,"height"), Integer::New(isolate,preview_height));
+    args.GetReturnValue().Set(obj);
 }
 
-Handle<Value> Open(const Arguments& args) {
+void Open(const FunctionCallbackInfo<Value>& args) {
+    Isolate* isolate = Isolate::GetCurrent();
+    HandleScope scope(isolate);
     
-    HandleScope scope;
     loop = uv_default_loop();
-    TMessage* message = new TMessage;
+    message = new TMessage;
     
     m_brk = 1;
     if(!args[0]->IsFunction()) {
-        return ThrowException(Exception::TypeError(String::New("First argument must be frame callback function")));
+        isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"First argument must be frame callback function")));
+        return;
     }
     
     //Default Arguments
     message->codec = std::string(".jpg");
-    Local<Value> input = Number::New(0);
+    Local<Value> input = Number::New(isolate,0);
     std::string* inputString;
     
     //Check if size is passed
     if(args.Length() == 2) {
         //Second parameter is parameters, which contains on Json object having width and height
         if(!args[1]->IsObject()) {
-            return ThrowException(Exception::TypeError(String::New("Second argument must be object")));
+            isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Second argument must be object")));
+            return;
         }
         Local<Object> params = args[1]->ToObject();
-        if(params->Has(String::NewSymbol("width"))) {
-            message->width = params->Get(String::NewSymbol("width"))->Int32Value();
-            message->height = params->Get(String::NewSymbol("height"))->Int32Value();
+        if(params->Has(String::NewFromUtf8(isolate,"width"))) {
+            message->width = params->Get(String::NewFromUtf8(isolate,"width"))->Int32Value();
+            message->height = params->Get(String::NewFromUtf8(isolate,"height"))->Int32Value();
         }
-        if(params->Has(String::NewSymbol("window"))) {
-            message->window = params->Get(String::NewSymbol("window"))->BooleanValue();
+        if(params->Has(String::NewFromUtf8(isolate,"window"))) {
+            message->window = params->Get(String::NewFromUtf8(isolate,"window"))->BooleanValue();
         }
-        if(params->Has(String::NewSymbol("codec"))) {
-            Local<String> val = params->Get(String::NewSymbol("codec"))->ToString();
+        if(params->Has(String::NewFromUtf8(isolate,"codec"))) {
+            Local<String> val = params->Get(String::NewFromUtf8(isolate,"codec"))->ToString();
             message->codec = *stringValue(val);
         }
-        if(params->Has(String::NewSymbol("input"))) {
-            input = params->Get(String::NewSymbol("input"));
+        if(params->Has(String::NewFromUtf8(isolate,"input"))) {
+            input = params->Get(String::NewFromUtf8(isolate,"input"));
             if(!input->IsNumber()) {
                 inputString = stringValue(input);
             }
@@ -198,9 +200,7 @@ Handle<Value> Open(const Arguments& args) {
         cv::namedWindow("Preview",1);   
     }
     
-    Local<Function> localFunc = Local<Function>::Cast(args[0]);
-    
-    message->callBack = Persistent<Function>::New(localFunc);
+    message->callBack.Reset(isolate,Handle<Function>::Cast(args[0]));
     //Initiate OpenCV WebCam
     message->capture = new cv::VideoCapture();
     if(input->IsNumber()) {
@@ -213,9 +213,9 @@ Handle<Value> Open(const Arguments& args) {
     uv_work_t* req = new uv_work_t();
     req->data = message;
     
-    async = new uv_async_t();
+    async = uv_async_t();
     
-    uv_async_init(loop,async,updateAsync);
+    uv_async_init(loop,&async,(uv_async_cb)updateAsync);
     uv_queue_work(loop, req, CameraOpen,(uv_after_work_cb) CameraClose);
     
     //Free resources
@@ -224,34 +224,35 @@ Handle<Value> Open(const Arguments& args) {
         delete inputString;
     }
     
-    return scope.Close(String::New("ok"));
+    args.GetReturnValue().Set(String::NewFromUtf8(isolate,"ok"));
 }
 
-Handle<Value> Close(const Arguments& args) {
-    
-    HandleScope scope;
+void Close(const FunctionCallbackInfo<Value>& args) {
+    Isolate* isolate = Isolate::GetCurrent();
+    HandleScope scope(isolate);
     
     m_brk = 0;
     uv_run(loop,UV_RUN_DEFAULT);
-    uv_close((uv_handle_t *) async, NULL);
-    delete async;
+    uv_close((uv_handle_t *) &async, NULL);
     delete loop;
     cv::destroyWindow("Preview");
-    return scope.Close(String::New("ok"));
+    args.GetReturnValue().Set(String::NewFromUtf8(isolate,"ok"));
 }
 
 void init(Handle<Object> exports) {
-    exports->Set(String::NewSymbol("Open"), FunctionTemplate::New(Open)->GetFunction());
-    exports->Set(String::NewSymbol("Close"), FunctionTemplate::New(Close)->GetFunction());
-    exports->Set(String::NewSymbol("IsOpen"), FunctionTemplate::New(IsOpen)->GetFunction());
-    exports->Set(String::NewSymbol("GetPreviewSize"), FunctionTemplate::New(GetPreviewSize)->GetFunction());
+    Isolate* isolate = Isolate::GetCurrent();
+    HandleScope scope(isolate);
+    exports->Set(String::NewFromUtf8(isolate,"Open"), FunctionTemplate::New(isolate,Open)->GetFunction());
+    exports->Set(String::NewFromUtf8(isolate,"Close"), FunctionTemplate::New(isolate,Close)->GetFunction());
+    exports->Set(String::NewFromUtf8(isolate,"IsOpen"), FunctionTemplate::New(isolate,IsOpen)->GetFunction());
+    exports->Set(String::NewFromUtf8(isolate,"GetPreviewSize"), FunctionTemplate::New(isolate,GetPreviewSize)->GetFunction());
 }
 
 std::string* stringValue(Local<Value> value) {
     if(value->IsString()){
         //Alloc #1
-        char * buffer = (char*) malloc(sizeof(char) * value->ToString()->Length());
-        value->ToString()->WriteAscii(buffer,0,value->ToString()->Length());
+        char * buffer = (char*) malloc(sizeof(char) * value->ToString()->Utf8Length());
+        value->ToString()->WriteUtf8(buffer,value->ToString()->Utf8Length());
         std::string *ret = new std::string(buffer);
         free(buffer);
         return ret;
