@@ -20,3 +20,4 @@ npm start -- [-open] [-wsport websocketPort] [-webport webserverport] [-res widt
 |-wsport | Web socket port for streaming media |
 |-webport | Web server port |
 |-res | Resolution for preview image |
+|-input | Input source. ( eg. ip camera url) |

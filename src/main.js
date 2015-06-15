@@ -1,10 +1,11 @@
 var WebSocketServer = require("ws").Server;
-var cam = require("../build/Release/camera.node");
+var cam = require("../build/Debug/camera.node");
 var fs = require("fs");
 var websocketPort = 9090,
     webPort = 9999,
     openBrowser = false,
     width = 640,
+    inputString = "",
     height = 360;
 
 //Gathering Arguments
@@ -24,6 +25,9 @@ process.argv.forEach(function (val, index, array) {
         width = parseInt(res[0]);
         height = parseInt(res[1]);
         break;
+    case "-input":
+        inputString = array[index + 1];
+        console.log(inputString);
     }
 });
 
@@ -61,7 +65,8 @@ var connectClient = function (ws) {
             width: width,
             height: height,
             window: false,
-            codec: ".jpg"
+            codec: ".jpg",
+            input: inputString
         });
     }
     clients[index] = ws;

@@ -19,7 +19,7 @@
 using namespace v8;
 
 //Define functions in scope
-std::string* stringValue(Local<Value> value);
+std::string stringValue(Local<Value> value);
 
 int m_brk;
 int32_t preview_width, preview_height;
@@ -167,7 +167,7 @@ void Open(const FunctionCallbackInfo<Value>& args) {
     //Default Arguments
     message->codec = std::string(".jpg");
     Local<Value> input = Number::New(isolate,0);
-    std::string* inputString;
+    std::string inputString;
     
     //Check if size is passed
     if(args.Length() == 2) {
@@ -186,7 +186,7 @@ void Open(const FunctionCallbackInfo<Value>& args) {
         }
         if(params->Has(String::NewFromUtf8(isolate,"codec"))) {
             Local<String> val = params->Get(String::NewFromUtf8(isolate,"codec"))->ToString();
-            message->codec = *stringValue(val);
+            message->codec = stringValue(val);
         }
         if(params->Has(String::NewFromUtf8(isolate,"input"))) {
             input = params->Get(String::NewFromUtf8(isolate,"input"));
@@ -205,8 +205,8 @@ void Open(const FunctionCallbackInfo<Value>& args) {
     message->capture = new cv::VideoCapture();
     if(input->IsNumber()) {
         message->capture->open((int)input->Int32Value());
-    } else {
-        message->capture->open(*inputString);
+    } else if(!inputString.empty()) {
+        message->capture->open(inputString);
     }
     cv::waitKey(10);
     
@@ -217,12 +217,6 @@ void Open(const FunctionCallbackInfo<Value>& args) {
     
     uv_async_init(loop,&async,(uv_async_cb)updateAsync);
     uv_queue_work(loop, req, CameraOpen,(uv_after_work_cb) CameraClose);
-    
-    //Free resources
-    //free #1
-    if(!input->IsNumber()) {
-        delete inputString;
-    }
     
     args.GetReturnValue().Set(String::NewFromUtf8(isolate,"ok"));
 }
@@ -248,16 +242,16 @@ void init(Handle<Object> exports) {
     exports->Set(String::NewFromUtf8(isolate,"GetPreviewSize"), FunctionTemplate::New(isolate,GetPreviewSize)->GetFunction());
 }
 
-std::string* stringValue(Local<Value> value) {
+std::string stringValue(Local<Value> value) {
     if(value->IsString()){
         //Alloc #1
         char * buffer = (char*) malloc(sizeof(char) * value->ToString()->Utf8Length());
         value->ToString()->WriteUtf8(buffer,value->ToString()->Utf8Length());
-        std::string *ret = new std::string(buffer);
+        std::string ret(buffer);
         free(buffer);
         return ret;
     } else {
-        return new std::string("");
+        return "";
     }
 }
 
