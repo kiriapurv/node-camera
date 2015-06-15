@@ -1,5 +1,5 @@
 var WebSocketServer = require("ws").Server;
-var cam = require("../build/Debug/camera.node");
+var cam = require("../build/Release/camera.node");
 var fs = require("fs");
 var websocketPort = 9090,
     webPort = 9999,
