@@ -56,7 +56,7 @@ void updateAsync(uv_async_t* req, int status) {
     
     Local<Function> callBack = Local<Function>::New(isolate,message->callBack);
     
-    if(asyncMessage->window) {
+    if(asyncMessage->window && asyncMessage->frame.size().height > 0 && asyncMessage->frame.size().width > 0 ) {
         cv::imshow("Preview", asyncMessage->frame);
         cv::waitKey(20);
     }
@@ -74,17 +74,20 @@ void updateAsync(uv_async_t* req, int status) {
     callBack->Call(isolate->GetCurrentContext()->Global(), 1, argv);
     asyncMessage->image.clear();
     asyncMessage->frame.release();
+    
+    delete asyncMessage;
 }
 
 void CameraOpen(uv_work_t* req) {
     TMessage* message = (TMessage*) req->data;
     
+    cv::Mat tmp, rsz;
+    
     while(m_brk > 0 && message->capture->isOpened()) {  
-        cv::Mat tmp, rsz;
         
-        AsyncMessage msg;
-        msg.image = std::vector<uchar>();
-        msg.window = message->window;
+        AsyncMessage *msg = new AsyncMessage();
+        msg->image = std::vector<unsigned char>();
+        msg->window = message->window;
         
         //Capture Frame From WebCam
         message->capture->read(tmp);
@@ -92,12 +95,12 @@ void CameraOpen(uv_work_t* req) {
         if(message->resize) {
             cv::Size size = cv::Size(message->width,message->height);
             cv::resize(tmp,rsz,size);
-            msg.frame = rsz;
+            msg->frame = rsz;
             //Update Size
             preview_width = message->width;
             preview_height = message->height;
         } else {
-            msg.frame = tmp;
+            msg->frame = tmp;
             //Update Size
             preview_width = tmp.size().width;
             preview_height = tmp.size().height;
@@ -105,25 +108,30 @@ void CameraOpen(uv_work_t* req) {
 
         //TODO : Add image parameters here
 
-        std::vector<int> compression_parameters;
-        compression_parameters.push_back( CV_IMWRITE_JPEG_QUALITY);
-        compression_parameters.push_back(50);
+        std::vector<int> compression_parameters = std::vector<int>(2);
+        compression_parameters[0] = CV_IMWRITE_JPEG_QUALITY;
+        compression_parameters[1] = 85;
         
         //Encode to jpg
         if(message->resize) {
-            cv::imencode(message->codec,rsz,msg.image,compression_parameters);   
+            cv::imencode(message->codec,rsz,msg->image,compression_parameters);   
         } else {
-            cv::imencode(message->codec,tmp,msg.image,compression_parameters);
+            cv::imencode(message->codec,tmp,msg->image,compression_parameters);
         }
         
         compression_parameters.clear();
         
-        async.data  = &msg;
+        if(message->window && tmp.size().height > 0 && tmp.size().width > 0 ) {
+            cv::imshow("Preview", msg->frame);
+            cv::waitKey(20);
+        }
+        
+        async.data  = msg;
         uv_async_send(&async);
         
-        rsz.release();
-        tmp.release();
     }
+    rsz.release();
+    tmp.release();
     
 }
 
@@ -189,7 +197,7 @@ void Open(const FunctionCallbackInfo<Value>& args) {
             message->codec = stringValue(val);
         }
         if(params->Has(String::NewFromUtf8(isolate,"input"))) {
-            input = params->Get(String::NewFromUtf8(isolate,"input"));
+            Local<Value> input = params->Get(String::NewFromUtf8(isolate,"input"));
             if(!input->IsNumber()) {
                 inputString = stringValue(input);
             }
@@ -201,6 +209,7 @@ void Open(const FunctionCallbackInfo<Value>& args) {
     }
     
     message->callBack.Reset(isolate,Handle<Function>::Cast(args[0]));
+    
     //Initiate OpenCV WebCam
     message->capture = new cv::VideoCapture();
     if(input->IsNumber()) {
@@ -226,9 +235,8 @@ void Close(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(isolate);
     
     m_brk = 0;
-    uv_run(loop,UV_RUN_DEFAULT);
+    uv_loop_close(loop);
     uv_close((uv_handle_t *) &async, NULL);
-    delete loop;
     cv::destroyWindow("Preview");
     args.GetReturnValue().Set(String::NewFromUtf8(isolate,"ok"));
 }

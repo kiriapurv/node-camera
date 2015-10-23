@@ -28,6 +28,7 @@
                         'library_dirs': ['/opt/local/lib']
                     },
                     'xcode_settings': {
+                        'MACOSX_DEPLOYMENT_TARGET' : '10.7',
                         'OTHER_CFLAGS': [
                             "-mmacosx-version-min=10.7",
                             "-std=c++11",

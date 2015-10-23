@@ -2,8 +2,7 @@
     "name": "Streaming",
     "main": "src/main.js",
     "dependencies": {
-        "ws": "*",
-        "heapdump": "*"
+        "ws": "*"
     },
     "scripts": {
         "start": "node src/main.js"
